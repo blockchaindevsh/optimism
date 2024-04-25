@@ -329,13 +329,14 @@ func (btx *spanBatchTxs) decode(r *bytes.Reader) error {
 	return nil
 }
 
-func (btx *spanBatchTxs) fullTxs(chainID *big.Int) ([][]byte, error) {
+func (btx *spanBatchTxs) fullTxs(chainID *big.Int) ([][]byte, []common.Hash, error) {
 	var txs [][]byte
 	toIdx := 0
+	var blobHashes []common.Hash
 	for idx := 0; idx < int(btx.totalBlockTxCount); idx++ {
 		var stx spanBatchTx
 		if err := stx.UnmarshalBinary(btx.txDatas[idx]); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		nonce := btx.txNonces[idx]
 		gas := btx.txGases[idx]
@@ -343,7 +344,7 @@ func (btx *spanBatchTxs) fullTxs(chainID *big.Int) ([][]byte, error) {
 		bit := btx.contractCreationBits.Bit(idx)
 		if bit == 0 {
 			if len(btx.txTos) <= toIdx {
-				return nil, errors.New("tx to not enough")
+				return nil, nil, errors.New("tx to not enough")
 			}
 			to = &btx.txTos[toIdx]
 			toIdx++
@@ -353,15 +354,16 @@ func (btx *spanBatchTxs) fullTxs(chainID *big.Int) ([][]byte, error) {
 		s := btx.txSigs[idx].s.ToBig()
 		tx, err := stx.convertToFullTx(nonce, gas, to, chainID, v, r, s)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		blobHashes = append(blobHashes, tx.BlobHashes()...)
 		encodedTx, err := tx.MarshalBinary()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		txs = append(txs, encodedTx)
 	}
-	return txs, nil
+	return txs, blobHashes, nil
 }
 
 func convertVToYParity(v uint64, txType int) (uint, error) {
@@ -395,7 +397,7 @@ func isProtectedV(v uint64, txType int) bool {
 	return true
 }
 
-func newSpanBatchTxs(txs [][]byte, chainID *big.Int) (*spanBatchTxs, error) {
+func newSpanBatchTxs(txs [][]byte, chainID *big.Int) (*spanBatchTxs, []common.Hash, error) {
 	totalBlockTxCount := uint64(len(txs))
 	var txSigs []spanBatchSignature
 	var txTos []common.Address
@@ -407,10 +409,11 @@ func newSpanBatchTxs(txs [][]byte, chainID *big.Int) (*spanBatchTxs, error) {
 	yParityBits := new(big.Int)
 	protectedBits := new(big.Int)
 	totalLegacyTxCount := uint64(0)
+	var blobHashes []common.Hash
 	for idx := 0; idx < int(totalBlockTxCount); idx++ {
 		var tx types.Transaction
 		if err := tx.UnmarshalBinary(txs[idx]); err != nil {
-			return nil, errors.New("failed to decode tx")
+			return nil, nil, errors.New("failed to decode tx")
 		}
 		if tx.Type() == types.LegacyTxType {
 			protectedBit := uint(0)
@@ -420,8 +423,9 @@ func newSpanBatchTxs(txs [][]byte, chainID *big.Int) (*spanBatchTxs, error) {
 			protectedBits.SetBit(protectedBits, int(totalLegacyTxCount), protectedBit)
 			totalLegacyTxCount++
 		}
+		blobHashes = append(blobHashes, tx.BlobHashes()...)
 		if tx.Protected() && tx.ChainId().Cmp(chainID) != 0 {
-			return nil, fmt.Errorf("protected tx has chain ID %d, but expected chain ID %d", tx.ChainId(), chainID)
+			return nil, nil, fmt.Errorf("protected tx has chain ID %d, but expected chain ID %d", tx.ChainId(), chainID)
 		}
 		var txSig spanBatchSignature
 		v, r, s := tx.RawSignatureValues()
@@ -439,18 +443,18 @@ func newSpanBatchTxs(txs [][]byte, chainID *big.Int) (*spanBatchTxs, error) {
 		contractCreationBits.SetBit(contractCreationBits, idx, contractCreationBit)
 		yParityBit, err := convertVToYParity(txSig.v, int(tx.Type()))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		yParityBits.SetBit(yParityBits, idx, yParityBit)
 		txNonces = append(txNonces, tx.Nonce())
 		txGases = append(txGases, tx.Gas())
 		stx, err := newSpanBatchTx(tx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		txData, err := stx.MarshalBinary()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		txDatas = append(txDatas, txData)
 		txTypes = append(txTypes, int(tx.Type()))
@@ -467,5 +471,5 @@ func newSpanBatchTxs(txs [][]byte, chainID *big.Int) (*spanBatchTxs, error) {
 		txTypes:              txTypes,
 		protectedBits:        protectedBits,
 		totalLegacyTxCount:   totalLegacyTxCount,
-	}, nil
+	}, blobHashes, nil
 }

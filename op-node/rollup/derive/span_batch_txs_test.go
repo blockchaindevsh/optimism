@@ -418,10 +418,10 @@ func TestSpanBatchTxsRoundTripFullTxs(t *testing.T) {
 					require.NoError(t, err)
 					txs = append(txs, rawTx)
 				}
-				sbt, err := newSpanBatchTxs(txs, chainID)
+				sbt, _, err := newSpanBatchTxs(txs, chainID)
 				require.NoError(t, err)
 
-				txs2, err := sbt.fullTxs(chainID)
+				txs2, _, err := sbt.fullTxs(chainID)
 				require.NoError(t, err)
 
 				require.Equal(t, txs, txs2)
@@ -467,13 +467,13 @@ func TestSpanBatchTxsFullTxNotEnoughTxTos(t *testing.T) {
 				require.NoError(t, err)
 				txs = append(txs, rawTx)
 			}
-			sbt, err := newSpanBatchTxs(txs, chainID)
+			sbt, _, err := newSpanBatchTxs(txs, chainID)
 			require.NoError(t, err)
 
 			// drop single to field
 			sbt.txTos = sbt.txTos[:len(sbt.txTos)-2]
 
-			_, err = sbt.fullTxs(chainID)
+			_, _, err = sbt.fullTxs(chainID)
 			require.EqualError(t, err, "tx to not enough")
 		})
 	}

@@ -737,7 +737,7 @@ func ChannelBuilder_InputBytes(t *testing.T, batchType uint) {
 	var spanBatchBuilder *derive.SpanBatchBuilder
 	if batchType == derive.SpanBatchType {
 		chainId := big.NewInt(1234)
-		spanBatchBuilder = derive.NewSpanBatchBuilder(uint64(0), chainId)
+		spanBatchBuilder = derive.NewSpanBatchBuilder(uint64(0), chainId, nil)
 	}
 	cb, err := NewChannelBuilder(cfg, defaultTestRollupConfig, latestL1BlockOrigin)
 	require.NoError(err)

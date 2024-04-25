@@ -55,7 +55,7 @@ func RandomRawSpanBatch(rng *rand.Rand, chainId *big.Int) *RawSpanBatch {
 		}
 		txs = append(txs, rawTx)
 	}
-	spanBatchTxs, err := newSpanBatchTxs(txs, chainId)
+	spanBatchTxs, _, err := newSpanBatchTxs(txs, chainId)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -182,7 +182,7 @@ func TestBatchRoundTrip(t *testing.T) {
 		err = dec.UnmarshalBinary(enc)
 		require.NoError(t, err)
 		if dec.GetBatchType() == SpanBatchType {
-			_, err := DeriveSpanBatch(&dec, blockTime, genesisTimestamp, chainID)
+			_, err := DeriveSpanBatch(&dec, blockTime, genesisTimestamp, chainID, nil)
 			require.NoError(t, err)
 		}
 		require.Equal(t, batch, &dec, "Batch not equal test case %v", i)
@@ -230,7 +230,7 @@ func TestBatchRoundTripRLP(t *testing.T) {
 		err = dec.DecodeRLP(s)
 		require.NoError(t, err)
 		if dec.GetBatchType() == SpanBatchType {
-			_, err = DeriveSpanBatch(&dec, blockTime, genesisTimestamp, chainID)
+			_, err = DeriveSpanBatch(&dec, blockTime, genesisTimestamp, chainID, nil)
 			require.NoError(t, err)
 		}
 		require.Equal(t, batch, &dec, "Batch not equal test case %v", i)

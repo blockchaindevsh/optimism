@@ -85,7 +85,7 @@ func NewChannelBuilder(cfg ChannelConfig, rollupCfg rollup.Config, latestL1Origi
 	}
 	var spanBatchBuilder *derive.SpanBatchBuilder
 	if cfg.BatchType == derive.SpanBatchType {
-		spanBatchBuilder = derive.NewSpanBatchBuilder(rollupCfg.Genesis.L2Time, rollupCfg.L2ChainID)
+		spanBatchBuilder = derive.NewSpanBatchBuilder(rollupCfg.Genesis.L2Time, rollupCfg.L2ChainID, rollupCfg.DACConfig.DAProofFunc())
 	}
 	co, err := derive.NewChannelOut(cfg.BatchType, c, spanBatchBuilder)
 	if err != nil {

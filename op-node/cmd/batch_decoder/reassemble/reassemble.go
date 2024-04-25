@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/ethereum-optimism/optimism/op-node/cmd/batch_decoder/fetch"
+	"github.com/ethereum-optimism/optimism/op-node/rollup"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +42,7 @@ type Config struct {
 	L2ChainID     *big.Int
 	L2GenesisTime uint64
 	L2BlockTime   uint64
+	DACConfig     *rollup.DACConfig
 }
 
 func LoadFrames(directory string, inbox common.Address) []FrameWithMetadata {
@@ -128,7 +130,7 @@ func processFrames(cfg Config, id derive.ChannelID, frames []FrameWithMetadata) 
 						// singularBatch will be nil when errored
 						batches = append(batches, singularBatch)
 					case derive.SpanBatchType:
-						spanBatch, err := derive.DeriveSpanBatch(batchData, cfg.L2BlockTime, cfg.L2GenesisTime, cfg.L2ChainID)
+						spanBatch, err := derive.DeriveSpanBatch(batchData, cfg.L2BlockTime, cfg.L2GenesisTime, cfg.L2ChainID, cfg.DACConfig.CheckDAProofFunc())
 						if err != nil {
 							invalidBatches = true
 							fmt.Printf("Error deriving spanBatch from batchData for channel %v. Err: %v\n", id.String(), err)

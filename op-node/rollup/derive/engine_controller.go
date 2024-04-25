@@ -83,10 +83,6 @@ func NewEngineController(engine ExecEngine, log log.Logger, metrics Metrics, rol
 		syncStatus = syncStatusWillStartEL
 	}
 
-	var dacClient rollup.DACClient
-	if rollupCfg.DACConfig != nil {
-		dacClient = rollupCfg.DACConfig.Client()
-	}
 	return &EngineController{
 		engine:     engine,
 		log:        log,
@@ -95,7 +91,7 @@ func NewEngineController(engine ExecEngine, log log.Logger, metrics Metrics, rol
 		syncMode:   syncMode,
 		syncStatus: syncStatus,
 		clock:      clock.SystemClock,
-		dacClient:  dacClient,
+		dacClient:  rollupCfg.DACConfig.Client(),
 	}
 }
 

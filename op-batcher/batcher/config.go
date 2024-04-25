@@ -118,6 +118,9 @@ func (c *CLIConfig) Check() error {
 	if c.BatchType > 1 {
 		return fmt.Errorf("unknown batch type: %v", c.BatchType)
 	}
+	if c.BatchType == 0 {
+		return fmt.Errorf("in order to support channel level da proof, only SpanBatch is allowed")
+	}
 	if c.DataAvailabilityType == flags.BlobsType && c.TargetNumFrames > 6 {
 		return errors.New("too many frames for blob transactions, max 6")
 	}

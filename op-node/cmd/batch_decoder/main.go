@@ -160,6 +160,7 @@ func main() {
 					L2ChainID:     L2ChainID,
 					L2GenesisTime: L2GenesisTime,
 					L2BlockTime:   L2BlockTime,
+					DACConfig:     rollupCfg.DACConfig,
 				}
 				reassemble.Channels(config)
 				return nil

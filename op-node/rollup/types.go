@@ -128,16 +128,62 @@ type Config struct {
 }
 
 type DACConfig struct {
-	URL string
+	URL              string
+	Signer           common.Address
+	client           DACClient
+	daProofFunc      func([]common.Hash) ([]byte, error)
+	checkDAProofFunc func(blobHashes []common.Hash, daProof []byte) error
 }
 
 type DACClient interface {
 	UploadBlobs(*eth.ExecutionPayloadEnvelope) error
+	DAProof([]common.Hash) ([]byte, error)
+	CheckDAProof(blobHashes []common.Hash, daProof []byte) error
 }
 
 func (dacConfig *DACConfig) Client() DACClient {
+	// so that the caller doesn't have to check against nil
+	if dacConfig == nil {
+		return nil
+	}
+	if dacConfig.client != nil {
+		return dacConfig.client
+	}
+	dacConfig.client = client.New(dacConfig.URL, dacConfig.Signer)
+	return dacConfig.client
+}
 
-	return client.New(dacConfig.URL, common.Address{} /* this will be specified in the PR for phase 2 da */)
+func (dacConfig *DACConfig) CheckDAProofFunc() func(blobHashes []common.Hash, daProof []byte) error {
+	// so that the caller doesn't have to check against nil
+	if dacConfig == nil {
+		return nil
+	}
+
+	if dacConfig.checkDAProofFunc != nil {
+		return dacConfig.checkDAProofFunc
+	}
+	client := dacConfig.Client()
+	dacConfig.checkDAProofFunc = func(blobHashes []common.Hash, daProof []byte) error {
+		return client.CheckDAProof(blobHashes, daProof)
+	}
+
+	return dacConfig.checkDAProofFunc
+}
+
+func (dacConfig *DACConfig) DAProofFunc() func([]common.Hash) ([]byte, error) {
+	// so that the caller doesn't have to check against nil
+	if dacConfig == nil {
+		return nil
+	}
+	if dacConfig.daProofFunc != nil {
+		return dacConfig.daProofFunc
+	}
+
+	client := dacConfig.Client()
+	dacConfig.daProofFunc = func(blobHashes []common.Hash) ([]byte, error) {
+		return client.DAProof(blobHashes)
+	}
+	return dacConfig.daProofFunc
 }
 
 // ValidateL1Config checks L1 config variables for errors.

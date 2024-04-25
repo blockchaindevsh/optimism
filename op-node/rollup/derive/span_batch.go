@@ -44,6 +44,7 @@ type spanBatchPayload struct {
 	originBits    *big.Int      // Standard span-batch bitlist of blockCount bits. Each bit indicates if the L1 origin is changed at the L2 block.
 	blockTxCounts []uint64      // List of transaction counts for each L2 block
 	txs           *spanBatchTxs // Transactions encoded in SpanBatch specs
+	daProof       []byte
 }
 
 // RawSpanBatch is another representation of SpanBatch, that encodes data according to SpanBatch specs.
@@ -186,6 +187,26 @@ func (bp *spanBatchPayload) decodeTxs(r *bytes.Reader) error {
 	return nil
 }
 
+func (bp *spanBatchPayload) decodeDAProof(r *bytes.Reader) error {
+	if r.Len() == 0 {
+		return nil
+	}
+	proofLength, err := binary.ReadUvarint(r)
+	if err != nil {
+		return fmt.Errorf("failed to read proofLength: %w", err)
+	}
+	if proofLength > MaxSpanBatchSize {
+		return ErrTooBigSpanBatchSize
+	}
+	daProof := make([]byte, proofLength)
+	_, err = io.ReadFull(r, daProof)
+	if err != nil {
+		return fmt.Errorf("failed to read daProof: %w", err)
+	}
+	bp.daProof = daProof
+	return nil
+}
+
 // decodePayload parses data into bp.spanBatchPayload
 func (bp *spanBatchPayload) decodePayload(r *bytes.Reader) error {
 	if err := bp.decodeBlockCount(r); err != nil {
@@ -198,6 +219,9 @@ func (bp *spanBatchPayload) decodePayload(r *bytes.Reader) error {
 		return err
 	}
 	if err := bp.decodeTxs(r); err != nil {
+		return err
+	}
+	if err := bp.decodeDAProof(r); err != nil {
 		return err
 	}
 	return nil
@@ -311,6 +335,21 @@ func (bp *spanBatchPayload) encodeTxs(w io.Writer) error {
 	return nil
 }
 
+func (bp *spanBatchPayload) encodeDAProof(w io.Writer) error {
+	if len(bp.daProof) == 0 {
+		return nil
+	}
+	var buf [binary.MaxVarintLen64]byte
+	n := binary.PutUvarint(buf[:], uint64(len(bp.daProof)))
+	if _, err := w.Write(buf[:n]); err != nil {
+		return fmt.Errorf("cannot write daProof length: %w", err)
+	}
+	if _, err := w.Write(bp.daProof); err != nil {
+		return fmt.Errorf("cannot write daProof: %w", err)
+	}
+	return nil
+}
+
 // encodePayload encodes spanBatchPayload
 func (bp *spanBatchPayload) encodePayload(w io.Writer) error {
 	if err := bp.encodeBlockCount(w); err != nil {
@@ -323,6 +362,9 @@ func (bp *spanBatchPayload) encodePayload(w io.Writer) error {
 		return err
 	}
 	if err := bp.encodeTxs(w); err != nil {
+		return err
+	}
+	if err := bp.encodeDAProof(w); err != nil {
 		return err
 	}
 	return nil
@@ -341,7 +383,7 @@ func (b *RawSpanBatch) encode(w io.Writer) error {
 
 // derive converts RawSpanBatch into SpanBatch, which has a list of SpanBatchElement.
 // We need chain config constants to derive values for making payload attributes.
-func (b *RawSpanBatch) derive(blockTime, genesisTimestamp uint64, chainID *big.Int) (*SpanBatch, error) {
+func (b *RawSpanBatch) derive(blockTime, genesisTimestamp uint64, chainID *big.Int, checkDAProofFunc func(blobHashes []common.Hash, daProof []byte) error) (*SpanBatch, error) {
 	if b.blockCount == 0 {
 		return nil, ErrEmptySpanBatch
 	}
@@ -357,9 +399,20 @@ func (b *RawSpanBatch) derive(blockTime, genesisTimestamp uint64, chainID *big.I
 	if err := b.txs.recoverV(chainID); err != nil {
 		return nil, err
 	}
-	fullTxs, err := b.txs.fullTxs(chainID)
+	fullTxs, blobHashes, err := b.txs.fullTxs(chainID)
 	if err != nil {
 		return nil, err
+	}
+	if checkDAProofFunc != nil {
+		// checkDAProofFunc can handle the empty case, so no need to check it again.
+		err = checkDAProofFunc(blobHashes, b.daProof)
+		if err != nil {
+			return nil, fmt.Errorf("checkDAProof failed:%w", err)
+		}
+	} else {
+		if len(b.daProof) != 0 {
+			return nil, fmt.Errorf("no dac is configured, but daProof is not empty")
+		}
 	}
 
 	spanBatch := SpanBatch{
@@ -382,8 +435,8 @@ func (b *RawSpanBatch) derive(blockTime, genesisTimestamp uint64, chainID *big.I
 
 // ToSpanBatch converts RawSpanBatch to SpanBatch,
 // which implements a wrapper of derive method of RawSpanBatch
-func (b *RawSpanBatch) ToSpanBatch(blockTime, genesisTimestamp uint64, chainID *big.Int) (*SpanBatch, error) {
-	spanBatch, err := b.derive(blockTime, genesisTimestamp, chainID)
+func (b *RawSpanBatch) ToSpanBatch(blockTime, genesisTimestamp uint64, chainID *big.Int, checkDAProofFunc func(blobHashes []common.Hash, daProof []byte) error) (*SpanBatch, error) {
+	spanBatch, err := b.derive(blockTime, genesisTimestamp, chainID, checkDAProofFunc)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +557,7 @@ func (b *SpanBatch) AppendSingularBatch(singularBatch *SingularBatch) {
 }
 
 // ToRawSpanBatch merges SingularBatch List and initialize single RawSpanBatch
-func (b *SpanBatch) ToRawSpanBatch(originChangedBit uint, genesisTimestamp uint64, chainID *big.Int) (*RawSpanBatch, error) {
+func (b *SpanBatch) ToRawSpanBatch(originChangedBit uint, genesisTimestamp uint64, chainID *big.Int, daProofFunc func([]common.Hash) ([]byte, error)) (*RawSpanBatch, error) {
 	if len(b.Batches) == 0 {
 		return nil, errors.New("cannot merge empty singularBatch list")
 	}
@@ -541,11 +594,20 @@ func (b *SpanBatch) ToRawSpanBatch(originChangedBit uint, genesisTimestamp uint6
 		}
 	}
 	raw.blockTxCounts = blockTxCounts
-	stxs, err := newSpanBatchTxs(txs, chainID)
+	stxs, blobHashes, err := newSpanBatchTxs(txs, chainID)
 	if err != nil {
 		return nil, err
 	}
 	raw.txs = stxs
+
+	if daProofFunc != nil {
+		daProof, err := daProofFunc(blobHashes)
+		if err != nil {
+			return nil, err
+		}
+		raw.daProof = daProof
+	}
+
 	return &raw, nil
 }
 
@@ -596,13 +658,13 @@ func NewSpanBatch(singularBatches []*SingularBatch) *SpanBatch {
 }
 
 // DeriveSpanBatch derives SpanBatch from BatchData.
-func DeriveSpanBatch(batchData *BatchData, blockTime, genesisTimestamp uint64, chainID *big.Int) (*SpanBatch, error) {
+func DeriveSpanBatch(batchData *BatchData, blockTime, genesisTimestamp uint64, chainID *big.Int, checkDAProofFunc func(blobHashes []common.Hash, daProof []byte) error) (*SpanBatch, error) {
 	rawSpanBatch, ok := batchData.inner.(*RawSpanBatch)
 	if !ok {
 		return nil, NewCriticalError(errors.New("failed type assertion to SpanBatch"))
 	}
 	// If the batch type is Span batch, derive block inputs from RawSpanBatch.
-	return rawSpanBatch.ToSpanBatch(blockTime, genesisTimestamp, chainID)
+	return rawSpanBatch.ToSpanBatch(blockTime, genesisTimestamp, chainID, checkDAProofFunc)
 }
 
 // SpanBatchBuilder is a utility type to build a SpanBatch by adding a SingularBatch one by one.
@@ -612,13 +674,15 @@ type SpanBatchBuilder struct {
 	chainID          *big.Int
 	spanBatch        *SpanBatch
 	originChangedBit uint
+	daProofFunc      func([]common.Hash) ([]byte, error)
 }
 
-func NewSpanBatchBuilder(genesisTimestamp uint64, chainID *big.Int) *SpanBatchBuilder {
+func NewSpanBatchBuilder(genesisTimestamp uint64, chainID *big.Int, daProofFunc func([]common.Hash) ([]byte, error)) *SpanBatchBuilder {
 	return &SpanBatchBuilder{
 		genesisTimestamp: genesisTimestamp,
 		chainID:          chainID,
 		spanBatch:        &SpanBatch{},
+		daProofFunc:      daProofFunc,
 	}
 }
 
@@ -633,7 +697,7 @@ func (b *SpanBatchBuilder) AppendSingularBatch(singularBatch *SingularBatch, seq
 }
 
 func (b *SpanBatchBuilder) GetRawSpanBatch() (*RawSpanBatch, error) {
-	raw, err := b.spanBatch.ToRawSpanBatch(b.originChangedBit, b.genesisTimestamp, b.chainID)
+	raw, err := b.spanBatch.ToRawSpanBatch(b.originChangedBit, b.genesisTimestamp, b.chainID, b.daProofFunc)
 	if err != nil {
 		return nil, err
 	}

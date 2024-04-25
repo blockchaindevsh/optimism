@@ -40,7 +40,7 @@ func TestSpanBatchForBatchInterface(t *testing.T) {
 func TestEmptySpanBatch(t *testing.T) {
 	rng := rand.New(rand.NewSource(0x77556691))
 	chainID := big.NewInt(rng.Int63n(1000))
-	spanTxs, err := newSpanBatchTxs(nil, chainID)
+	spanTxs, _, err := newSpanBatchTxs(nil, chainID)
 	require.NoError(t, err)
 
 	rawSpanBatch := RawSpanBatch{
@@ -324,10 +324,10 @@ func TestSpanBatchDerive(t *testing.T) {
 
 		spanBatch := NewSpanBatch(singularBatches)
 		originChangedBit := uint(originChangedBit)
-		rawSpanBatch, err := spanBatch.ToRawSpanBatch(originChangedBit, genesisTimeStamp, chainID)
+		rawSpanBatch, err := spanBatch.ToRawSpanBatch(originChangedBit, genesisTimeStamp, chainID, nil)
 		require.NoError(t, err)
 
-		spanBatchDerived, err := rawSpanBatch.derive(l2BlockTime, genesisTimeStamp, chainID)
+		spanBatchDerived, err := rawSpanBatch.derive(l2BlockTime, genesisTimeStamp, chainID, nil)
 		require.NoError(t, err)
 
 		blockCount := len(singularBatches)
@@ -378,7 +378,7 @@ func TestSpanBatchMerge(t *testing.T) {
 
 		spanBatch := NewSpanBatch(singularBatches)
 		originChangedBit := uint(originChangedBit)
-		rawSpanBatch, err := spanBatch.ToRawSpanBatch(originChangedBit, genesisTimeStamp, chainID)
+		rawSpanBatch, err := spanBatch.ToRawSpanBatch(originChangedBit, genesisTimeStamp, chainID, nil)
 		require.NoError(t, err)
 
 		// check span batch prefix
@@ -423,7 +423,7 @@ func TestSpanBatchToSingularBatch(t *testing.T) {
 
 		spanBatch := NewSpanBatch(singularBatches)
 		originChangedBit := uint(originChangedBit)
-		rawSpanBatch, err := spanBatch.ToRawSpanBatch(originChangedBit, genesisTimeStamp, chainID)
+		rawSpanBatch, err := spanBatch.ToRawSpanBatch(originChangedBit, genesisTimeStamp, chainID, nil)
 		require.NoError(t, err)
 
 		l1Origins := mockL1Origin(rng, rawSpanBatch, singularBatches)
@@ -508,7 +508,7 @@ func TestSpanBatchBuilder(t *testing.T) {
 		if originChangedBit == 1 {
 			seqNum = 0
 		}
-		spanBatchBuilder := NewSpanBatchBuilder(genesisTimeStamp, chainID)
+		spanBatchBuilder := NewSpanBatchBuilder(genesisTimeStamp, chainID, nil)
 
 		require.Equal(t, 0, spanBatchBuilder.GetBlockCount())
 
@@ -525,7 +525,7 @@ func TestSpanBatchBuilder(t *testing.T) {
 		// compare with rawSpanBatch not using spanBatchBuilder
 		spanBatch := NewSpanBatch(singularBatches)
 		originChangedBit := uint(originChangedBit)
-		rawSpanBatch2, err := spanBatch.ToRawSpanBatch(originChangedBit, genesisTimeStamp, chainID)
+		rawSpanBatch2, err := spanBatch.ToRawSpanBatch(originChangedBit, genesisTimeStamp, chainID, nil)
 		require.NoError(t, err)
 
 		require.Equal(t, rawSpanBatch2, rawSpanBatch)
