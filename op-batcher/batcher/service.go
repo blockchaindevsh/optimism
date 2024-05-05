@@ -102,6 +102,9 @@ func (bs *BatcherService) initFromCLIConfig(ctx context.Context, version string,
 	if err := bs.initRollupConfig(ctx); err != nil {
 		return fmt.Errorf("failed to load rollup config: %w", err)
 	}
+	if bs.RollupConfig.DACConfig != nil && cfg.BatchType == 0 {
+		return fmt.Errorf("in order to support channel level da proof, only SpanBatch is allowed")
+	}
 	if err := bs.initChannelConfig(cfg); err != nil {
 		return fmt.Errorf("failed to init channel config: %w", err)
 	}
