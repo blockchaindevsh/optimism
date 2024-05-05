@@ -3,6 +3,7 @@ package derive
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -91,6 +92,11 @@ func (cr *ChannelInReader) NextBatch(ctx context.Context) (Batch, error) {
 	}
 	switch batchData.GetBatchType() {
 	case SingularBatchType:
+		if cr.cfg.DACConfig != nil {
+			cr.log.Warn("singular batch is disabled when da proof is enabled, skipping to next channel now")
+			cr.NextChannel() // so that the next call will pull next channel
+			return nil, NotEnoughData
+		}
 		singularBatch, err := GetSingularBatch(batchData)
 		if err != nil {
 			return nil, err
@@ -107,6 +113,11 @@ func (cr *ChannelInReader) NextBatch(ctx context.Context) (Batch, error) {
 		}
 		spanBatch, err := DeriveSpanBatch(batchData, cr.cfg.BlockTime, cr.cfg.Genesis.L2Time, cr.cfg.L2ChainID, cr.cfg.DACConfig.CheckDAProofFunc())
 		if err != nil {
+			if errors.Is(err, errDA) {
+				cr.log.Warn("span batch failed due to da proof, skipping to next channel now", "err", err)
+				cr.NextChannel() // so that the next call will pull next channel
+				return nil, NotEnoughData
+			}
 			return nil, err
 		}
 		spanBatch.LogContext(cr.log).Debug("decoded span batch from channel", "stage_origin", cr.Origin())

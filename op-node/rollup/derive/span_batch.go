@@ -381,6 +381,8 @@ func (b *RawSpanBatch) encode(w io.Writer) error {
 	return nil
 }
 
+var errDA = errors.New("da error")
+
 // derive converts RawSpanBatch into SpanBatch, which has a list of SpanBatchElement.
 // We need chain config constants to derive values for making payload attributes.
 func (b *RawSpanBatch) derive(blockTime, genesisTimestamp uint64, chainID *big.Int, checkDAProofFunc func(blobHashes []common.Hash, daProof []byte) error) (*SpanBatch, error) {
@@ -407,11 +409,11 @@ func (b *RawSpanBatch) derive(blockTime, genesisTimestamp uint64, chainID *big.I
 		// checkDAProofFunc can handle the empty case, so no need to check it again.
 		err = checkDAProofFunc(blobHashes, b.daProof)
 		if err != nil {
-			return nil, fmt.Errorf("checkDAProof failed:%w", err)
+			return nil, fmt.Errorf("checkDAProof failed:%v %w", err, errDA)
 		}
 	} else {
 		if len(b.daProof) != 0 {
-			return nil, fmt.Errorf("no dac is configured, but daProof is not empty")
+			return nil, fmt.Errorf("no dac is configured, but daProof is not empty, %w", errDA)
 		}
 	}
 
