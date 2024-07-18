@@ -122,6 +122,9 @@ type Config struct {
 
 	// UsePlasma is activated when the chain is in plasma mode.
 	UsePlasma bool `json:"use_plasma"`
+
+	// UseInboxContract is a flag that indicates if the inbox is a contract
+	UseInboxContract bool `json:"use_inbox_contract"`
 }
 
 // ValidateL1Config checks L1 config variables for errors.

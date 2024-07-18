@@ -258,6 +258,9 @@ type DeployConfig struct {
 
 	// When Cancun activates. Relative to L1 genesis.
 	L1CancunTimeOffset *hexutil.Uint64 `json:"l1CancunTimeOffset,omitempty"`
+
+	// UseInboxContract is a flag that indicates if the inbox is a contract
+	UseInboxContract bool `json:"use_inbox_contract"`
 }
 
 // Copy will deeply copy the DeployConfig. This does a JSON roundtrip to copy

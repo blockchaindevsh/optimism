@@ -215,6 +215,7 @@ var Subcommands = cli.Commands{
 			if err != nil {
 				return err
 			}
+			rollupConfig.UseInboxContract = config.UseInboxContract
 			if err := rollupConfig.Check(); err != nil {
 				return fmt.Errorf("generated rollup config does not pass validation: %w", err)
 			}

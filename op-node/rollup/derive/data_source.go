@@ -56,6 +56,7 @@ func NewDataSourceFactory(log log.Logger, cfg *rollup.Config, fetcher L1Fetcher,
 		l1Signer:          cfg.L1Signer(),
 		batchInboxAddress: cfg.BatchInboxAddress,
 		plasmaEnabled:     cfg.UsePlasma,
+		useInboxContract:  cfg.UseInboxContract,
 	}
 	return &DataSourceFactory{
 		log:           log,
@@ -92,6 +93,7 @@ type DataSourceConfig struct {
 	l1Signer          types.Signer
 	batchInboxAddress common.Address
 	plasmaEnabled     bool
+	useInboxContract  bool
 }
 
 // isValidBatchTx returns true if:
