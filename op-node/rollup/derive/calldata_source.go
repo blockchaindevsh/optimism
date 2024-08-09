@@ -44,7 +44,7 @@ func NewCalldataSource(ctx context.Context, log log.Logger, dsCfg DataSourceConf
 			batcherAddr: batcherAddr,
 		}
 	}
-	txSucceed, err := getTxSucceedIfUseInboxContract(ctx, dsCfg.useInboxContract, fetcher, ref.Hash)
+	txSucceed, err := getTxSucceed(ctx, fetcher, ref.Hash)
 	if err != nil {
 		return &CalldataSource{
 			open:        false,
@@ -67,7 +67,7 @@ func NewCalldataSource(ctx context.Context, log log.Logger, dsCfg DataSourceConf
 func (ds *CalldataSource) Next(ctx context.Context) (eth.Data, error) {
 	if !ds.open {
 		if _, txs, err := ds.fetcher.InfoAndTxsByHash(ctx, ds.ref.Hash); err == nil {
-			txSucceeded, err := getTxSucceedIfUseInboxContract(ctx, ds.dsCfg.useInboxContract, ds.fetcher, ds.ref.Hash)
+			txSucceeded, err := getTxSucceed(ctx, ds.fetcher, ds.ref.Hash)
 			if err != nil {
 				return nil, err
 			}
@@ -94,7 +94,7 @@ func (ds *CalldataSource) Next(ctx context.Context) (eth.Data, error) {
 func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address, txs types.Transactions, log log.Logger, txSucceeded map[common.Hash]bool) []eth.Data {
 	out := []eth.Data{}
 	for _, tx := range txs {
-		// note: txSucceeded will only be nil when !useInboxContract
+		// note: txSucceeded will only be nil in test
 		if isValidBatchTx(tx, dsCfg.l1Signer, dsCfg.batchInboxAddress, batcherAddr) && (txSucceeded == nil || txSucceeded[tx.Hash()]) {
 			out = append(out, tx.Data())
 		}

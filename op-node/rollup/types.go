@@ -96,6 +96,10 @@ type Config struct {
 	// Active if InteropTime != nil && L2 block timestamp >= *InteropTime, inactive otherwise.
 	InteropTime *uint64 `json:"interop_time,omitempty"`
 
+	// InboxTime sets the activation time of the Inbox network upgrade.
+	// Active if InboxTime != nil && L2 block timestamp >= *InboxTime, inactive otherwise.
+	InboxTime *uint64 `json:"inbox_time,omitempty"`
+
 	// Note: below addresses are part of the block-derivation process,
 	// and required to be the same network-wide to stay in consensus.
 
@@ -122,9 +126,6 @@ type Config struct {
 
 	// UsePlasma is activated when the chain is in plasma mode.
 	UsePlasma bool `json:"use_plasma"`
-
-	// UseInboxContract is a flag that indicates if the inbox is a contract
-	UseInboxContract bool `json:"use_inbox_contract"`
 }
 
 // ValidateL1Config checks L1 config variables for errors.
@@ -350,9 +351,22 @@ func (c *Config) IsEcotone(timestamp uint64) bool {
 	return c.EcotoneTime != nil && timestamp >= *c.EcotoneTime
 }
 
+// IsInbox returns true if the Inbox hardfork is active at or past the given timestamp.
+func (c *Config) IsInbox(timestamp uint64) bool {
+	return c.InboxTime != nil && timestamp >= *c.InboxTime
+}
+
 // IsEcotoneActivationBlock returns whether the specified block is the first block subject to the
 // Ecotone upgrade. Ecotone activation at genesis does not count.
 func (c *Config) IsEcotoneActivationBlock(l2BlockTime uint64) bool {
+	return c.IsEcotone(l2BlockTime) &&
+		l2BlockTime >= c.BlockTime &&
+		!c.IsEcotone(l2BlockTime-c.BlockTime)
+}
+
+// IsInboxActivationBlock returns whether the specified block is the first block subject to the
+// Inbox upgrade. Inbox activation at genesis does not count.
+func (c *Config) IsInboxActivationBlock(l2BlockTime uint64) bool {
 	return c.IsEcotone(l2BlockTime) &&
 		l2BlockTime >= c.BlockTime &&
 		!c.IsEcotone(l2BlockTime-c.BlockTime)

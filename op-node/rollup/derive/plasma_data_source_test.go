@@ -112,13 +112,12 @@ func TestPlasmaDataSource(t *testing.T) {
 		}
 		l1Refs = append(l1Refs, ref)
 		logger.Info("new l1 block", "ref", ref)
-		// called for each l1 block to sync challenges
-		l1F.ExpectFetchReceipts(ref.Hash, nil, types.Receipts{}, nil)
 
 		// pick a random number of commitments to include in the l1 block
 		c := rng.Intn(4)
 		var txs []*types.Transaction
 
+		var receipts types.Receipts
 		for j := 0; j < c; j++ {
 			// mock input commitments in l1 transactions
 			input := testutils.RandomData(rng, 2000)
@@ -139,8 +138,14 @@ func TestPlasmaDataSource(t *testing.T) {
 			require.NoError(t, err)
 
 			txs = append(txs, tx)
-
+			receipts = append(receipts, &types.Receipt{TxHash: tx.Hash(), Status: types.ReceiptStatusSuccessful})
 		}
+
+		// called for getTxSucceed to get tx status
+		l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
+		// called for each l1 block to sync challenges
+		l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
+
 		logger.Info("included commitments", "count", c)
 		l1F.ExpectInfoAndTxsByHash(ref.Hash, testutils.RandomBlockInfo(rng), txs, nil)
 		// called once per derivation
@@ -162,7 +167,7 @@ func TestPlasmaDataSource(t *testing.T) {
 		}
 
 		// create a new data source for each block
-		src, err := factory.OpenData(ctx, ref, batcherAddr)
+		src, err := factory.OpenData(ctx, ref, batcherAddr, batcherInbox)
 		require.NoError(t, err)
 
 		// first challenge expires
@@ -199,6 +204,7 @@ func TestPlasmaDataSource(t *testing.T) {
 
 			if i == len(l1Refs)-1 {
 				l1F.ExpectFetchReceipts(ref.Hash, nil, types.Receipts{}, nil)
+				l1F.ExpectFetchReceipts(ref.Hash, nil, types.Receipts{}, nil)
 			}
 			// once past the l1 head, continue generating new l1 refs
 		} else {
@@ -212,13 +218,12 @@ func TestPlasmaDataSource(t *testing.T) {
 			}
 			l1Refs = append(l1Refs, ref)
 			logger.Info("new l1 block", "ref", ref)
-			// called for each l1 block to sync challenges
-			l1F.ExpectFetchReceipts(ref.Hash, nil, types.Receipts{}, nil)
 
 			// pick a random number of commitments to include in the l1 block
 			c := rng.Intn(4)
 			var txs []*types.Transaction
 
+			var receipts types.Receipts
 			for j := 0; j < c; j++ {
 				// mock input commitments in l1 transactions
 				input := testutils.RandomData(rng, 2000)
@@ -239,14 +244,21 @@ func TestPlasmaDataSource(t *testing.T) {
 				require.NoError(t, err)
 
 				txs = append(txs, tx)
+				receipts = append(receipts, &types.Receipt{TxHash: tx.Hash(), Status: types.ReceiptStatusSuccessful})
 
 			}
+
+			// called for getTxSucceed to get tx status
+			l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
+			// called for each l1 block to sync challenges
+			l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
+
 			logger.Info("included commitments", "count", c)
 			l1F.ExpectInfoAndTxsByHash(ref.Hash, testutils.RandomBlockInfo(rng), txs, nil)
 		}
 
 		// create a new data source for each block
-		src, err := factory.OpenData(ctx, ref, batcherAddr)
+		src, err := factory.OpenData(ctx, ref, batcherAddr, batcherInbox)
 		require.NoError(t, err)
 
 		// next challenge expires
@@ -338,7 +350,7 @@ func TestPlasmaDataSourceStall(t *testing.T) {
 		ParentHash: parent.Hash,
 		Time:       parent.Time + l1Time,
 	}
-	l1F.ExpectFetchReceipts(ref.Hash, nil, types.Receipts{}, nil)
+
 	// mock input commitments in l1 transactions
 	input := testutils.RandomData(rng, 2000)
 	comm, _ := storage.SetInput(ctx, input)
@@ -357,6 +369,9 @@ func TestPlasmaDataSourceStall(t *testing.T) {
 
 	txs := []*types.Transaction{tx}
 
+	receipts := types.Receipts{&types.Receipt{TxHash: tx.Hash(), Status: types.ReceiptStatusSuccessful}}
+	l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
+	l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
 	l1F.ExpectInfoAndTxsByHash(ref.Hash, testutils.RandomBlockInfo(rng), txs, nil)
 
 	// delete the input from the DA provider so it returns not found
@@ -365,7 +380,7 @@ func TestPlasmaDataSourceStall(t *testing.T) {
 	// next block is fetched to look ahead challenges but is not yet available
 	l1F.ExpectL1BlockRefByNumber(ref.Number+1, eth.L1BlockRef{}, ethereum.NotFound)
 
-	src, err := factory.OpenData(ctx, ref, batcherAddr)
+	src, err := factory.OpenData(ctx, ref, batcherAddr, batcherInbox)
 	require.NoError(t, err)
 
 	// data is not found so we return a temporary error
@@ -453,7 +468,7 @@ func TestPlasmaDataSourceInvalidData(t *testing.T) {
 		ParentHash: parent.Hash,
 		Time:       parent.Time + l1Time,
 	}
-	l1F.ExpectFetchReceipts(ref.Hash, nil, types.Receipts{}, nil)
+
 	// mock input commitments in l1 transactions with an oversized input
 	input := testutils.RandomData(rng, plasma.MaxInputSize+1)
 	comm, _ := storage.SetInput(ctx, input)
@@ -500,10 +515,17 @@ func TestPlasmaDataSourceInvalidData(t *testing.T) {
 	require.NoError(t, err)
 
 	txs := []*types.Transaction{tx1, tx2, tx3}
+	var receipts types.Receipts
+	for _, tx := range txs {
+		receipts = append(receipts, &types.Receipt{TxHash: tx.Hash(), Status: types.ReceiptStatusSuccessful})
+	}
+
+	l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
+	l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
 
 	l1F.ExpectInfoAndTxsByHash(ref.Hash, testutils.RandomBlockInfo(rng), txs, nil)
 
-	src, err := factory.OpenData(ctx, ref, batcherAddr)
+	src, err := factory.OpenData(ctx, ref, batcherAddr, batcherInbox)
 	require.NoError(t, err)
 
 	// oversized input is skipped and returns input2 directly

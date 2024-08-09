@@ -258,9 +258,6 @@ type DeployConfig struct {
 
 	// When Cancun activates. Relative to L1 genesis.
 	L1CancunTimeOffset *hexutil.Uint64 `json:"l1CancunTimeOffset,omitempty"`
-
-	// UseInboxContract is a flag that indicates if the inbox is a contract
-	UseInboxContract bool `json:"use_inbox_contract"`
 }
 
 // Copy will deeply copy the DeployConfig. This does a JSON roundtrip to copy
@@ -578,6 +575,7 @@ func (d *DeployConfig) RollupConfig(l1StartBlock *types.Block, l2GenesisBlockHas
 				Overhead:    eth.Bytes32(common.BigToHash(new(big.Int).SetUint64(d.GasPriceOracleOverhead))),
 				Scalar:      eth.Bytes32(common.BigToHash(new(big.Int).SetUint64(d.GasPriceOracleScalar))),
 				GasLimit:    uint64(d.L2GenesisBlockGasLimit),
+				BatchInbox:  d.BatchInboxAddress,
 			},
 		},
 		BlockTime:              d.L2BlockTime,

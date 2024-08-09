@@ -38,6 +38,9 @@ contract L1Block is ISemver {
     /// @notice The versioned hash to authenticate the batcher by.
     bytes32 public batcherHash;
 
+    /// @notice The canonical batch inbox.
+    bytes32 public batchInbox;
+
     /// @notice The overhead value applied to the L1 portion of the transaction fee.
     /// @custom:legacy
     uint256 public l1FeeOverhead;
@@ -114,6 +117,7 @@ contract L1Block is ISemver {
             sstore(blobBaseFee.slot, calldataload(68)) // uint256
             sstore(hash.slot, calldataload(100)) // bytes32
             sstore(batcherHash.slot, calldataload(132)) // bytes32
+            sstore(batchInbox.slot, calldataload(164)) // bytes32
         }
     }
 }

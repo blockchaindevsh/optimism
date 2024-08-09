@@ -22,7 +22,8 @@ contract SystemConfig is OwnableUpgradeable, ISemver {
         BATCHER,
         GAS_CONFIG,
         GAS_LIMIT,
-        UNSAFE_BLOCK_SIGNER
+        UNSAFE_BLOCK_SIGNER,
+        BATCH_INBOX
     }
 
     /// @notice Struct representing the addresses of L1 system contracts. These should be the
@@ -173,7 +174,7 @@ contract SystemConfig is OwnableUpgradeable, ISemver {
         _setGasLimit(_gasLimit);
 
         Storage.setAddress(UNSAFE_BLOCK_SIGNER_SLOT, _unsafeBlockSigner);
-        Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
+        _setBatchInbox(_batchInbox);
         Storage.setAddress(L1_CROSS_DOMAIN_MESSENGER_SLOT, _addresses.l1CrossDomainMessenger);
         Storage.setAddress(L1_ERC_721_BRIDGE_SLOT, _addresses.l1ERC721Bridge);
         Storage.setAddress(L1_STANDARD_BRIDGE_SLOT, _addresses.l1StandardBridge);
@@ -273,6 +274,21 @@ contract SystemConfig is OwnableUpgradeable, ISemver {
 
         bytes memory data = abi.encode(_batcherHash);
         emit ConfigUpdate(VERSION, UpdateType.BATCHER, data);
+    }
+
+    /// @notice Updates the batch inbox address. Can only be called by the owner.
+    /// @param _batchInbox New batch inbox address.
+    function setBatchInbox(address _batchInbox) external onlyOwner {
+        _setBatchInbox(_batchInbox);
+    }
+
+    /// @notice Updates the batch inbox address.
+    /// @param _batchInbox New batch inbox address.
+    function _setBatchInbox(address _batchInbox) internal {
+        Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
+
+        bytes memory data = abi.encode(_batchInbox);
+        emit ConfigUpdate(VERSION, UpdateType.BATCH_INBOX, data);
     }
 
     /// @notice Updates gas config. Can only be called by the owner.

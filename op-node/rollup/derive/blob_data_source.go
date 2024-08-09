@@ -73,10 +73,7 @@ func (ds *BlobDataSource) Next(ctx context.Context) (eth.Data, error) {
 	return data, nil
 }
 
-func getTxSucceedIfUseInboxContract(ctx context.Context, useInboxContract bool, fetcher L1Fetcher, hash common.Hash) (txSucceeded map[common.Hash]bool, err error) {
-	if !useInboxContract {
-		return
-	}
+func getTxSucceed(ctx context.Context, fetcher L1Fetcher, hash common.Hash) (txSucceeded map[common.Hash]bool, err error) {
 	_, receipts, err := fetcher.FetchReceipts(ctx, hash)
 	if err != nil {
 		return nil, NewTemporaryError(fmt.Errorf("failed to fetch L1 block info and receipts: %w", err))
@@ -101,7 +98,7 @@ func (ds *BlobDataSource) open(ctx context.Context) ([]blobOrCalldata, error) {
 		}
 		return nil, NewTemporaryError(fmt.Errorf("failed to open blob data source: %w", err))
 	}
-	txSucceeded, err := getTxSucceedIfUseInboxContract(ctx, ds.dsCfg.useInboxContract, ds.fetcher, ds.ref.Hash)
+	txSucceeded, err := getTxSucceed(ctx, ds.fetcher, ds.ref.Hash)
 	if err != nil {
 		return nil, err
 	}
@@ -140,9 +137,8 @@ func dataAndHashesFromTxs(txs types.Transactions, config *DataSourceConfig, batc
 	var hashes []eth.IndexedBlobHash
 	blobIndex := 0 // index of each blob in the block's blob sidecar
 	for _, tx := range txs {
-		// skip any non-batcher transactions or failed transactions if useInboxContract
-		// note: txSucceeded will only be nil when !useInboxContract
-		if !(isValidBatchTx(tx, config.l1Signer, config.batchInboxAddress, batcherAddr) && (txSucceeded == nil || txSucceeded[tx.Hash()])) {
+		// skip any non-batcher transactions or failed transactions
+		if !(isValidBatchTx(tx, config.l1Signer, config.batchInboxAddress, batcherAddr) && txSucceeded[tx.Hash()]) {
 			blobIndex += len(tx.BlobHashes())
 			continue
 		}
