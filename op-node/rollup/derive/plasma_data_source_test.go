@@ -100,6 +100,7 @@ func TestPlasmaDataSource(t *testing.T) {
 
 	nc := 0
 	firstChallengeExpirationBlock := uint64(95)
+	blockReceipts := make(map[common.Hash]types.Receipts)
 
 	for i := uint64(0); i <= pcfg.ChallengeWindow+pcfg.ResolveWindow; i++ {
 		parent := l1Refs[len(l1Refs)-1]
@@ -140,6 +141,7 @@ func TestPlasmaDataSource(t *testing.T) {
 			txs = append(txs, tx)
 			receipts = append(receipts, &types.Receipt{TxHash: tx.Hash(), Status: types.ReceiptStatusSuccessful})
 		}
+		blockReceipts[ref.Hash] = receipts
 
 		// called for getTxSucceed to get tx status
 		l1F.ExpectFetchReceipts(ref.Hash, nil, receipts, nil)
@@ -202,8 +204,9 @@ func TestPlasmaDataSource(t *testing.T) {
 			ref = l1Refs[i]
 			logger.Info("re deriving block", "ref", ref, "i", i)
 
+			// called for getTxSucceed to get tx status
+			l1F.ExpectFetchReceipts(ref.Hash, nil, blockReceipts[ref.Hash], nil)
 			if i == len(l1Refs)-1 {
-				l1F.ExpectFetchReceipts(ref.Hash, nil, types.Receipts{}, nil)
 				l1F.ExpectFetchReceipts(ref.Hash, nil, types.Receipts{}, nil)
 			}
 			// once past the l1 head, continue generating new l1 refs
