@@ -63,4 +63,18 @@ contract SystemConfigInterop is SystemConfig {
             ConfigType.REMOVE_DEPENDENCY, StaticConfig.encodeRemoveDependency(_chainId)
         );
     }
+
+    /// @notice Updates the batch inbox address. Can only be called by the owner.
+    /// @param _batchInbox New batch inbox address.
+    function setBatchInbox(address _batchInbox) external onlyOwner {
+        if (_batchInbox != batchInbox()) {
+            Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
+            OptimismPortal(payable(optimismPortal())).setConfig(
+                ConfigType.SET_BATCH_INBOX,
+                StaticConfig.encodeSetBatchInbox({
+                    _batchInbox: _batchInbox,
+                })
+            );
+        }
+    }
 }
