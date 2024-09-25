@@ -26,11 +26,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-
 var (
-	ErrBatcherNotRunning = errors.New("batcher is not running")
+	ErrBatcherNotRunning      = errors.New("batcher is not running")
 	ErrInboxTransactionFailed = errors.New("inbox transaction failed")
-	emptyTxData          = txData{
+	emptyTxData               = txData{
 		frames: []frameData{
 			{
 				data: []byte{},
@@ -662,12 +661,13 @@ func (l *BatchSubmitter) sendTransaction(txdata txData, queue *txmgr.Queue[txRef
 		candidate = l.calldataTxCandidate(txdata.CallData())
 	}
 
-
 	if *candidate.To != l.RollupConfig.BatchInboxAddress {
 		return fmt.Errorf("candidate.To is not inbox")
 	}
 	isEOAPointer := l.inboxIsEOA.Load()
 	if isEOAPointer == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+		defer cancel()
 		var code []byte
 		code, err = l.L1Client.CodeAt(ctx, *candidate.To, nil)
 		if err != nil {
@@ -737,7 +737,7 @@ func (l *BatchSubmitter) handleReceipt(r txmgr.TxReceipt[txRef]) {
 	} else {
 		// check tx status
 		if r.Receipt.Status == types.ReceiptStatusFailed {
-			l.recordFailedTx(r.ID, ErrInboxTransactionFailed)
+			l.recordFailedTx(r.ID.id, ErrInboxTransactionFailed)
 			return
 		}
 
