@@ -2,6 +2,7 @@ package script
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -45,6 +46,80 @@ func TestScript(t *testing.T) {
 	require.NoError(t, h.cheatcodes.Precompile.DumpState("noop"))
 }
 
+func TestModBalance(t *testing.T) {
+	logger, _ := testlog.CaptureLogger(t, log.LevelInfo)
+	af := foundry.OpenArtifactsDir("./testdata/test-artifacts")
+
+	scriptContext := DefaultContext
+	h := NewHost(logger, af, nil, scriptContext)
+	addr, err := h.LoadContract("ScriptExample.s.sol", "ScriptExample")
+	require.NoError(t, err)
+
+	require.NoError(t, h.EnableCheats())
+
+	artifact, err := h.af.ReadArtifact("ScriptExample.s.sol", "ScriptExample")
+	require.NoError(t, err)
+	account := common.Address{1, 2}
+
+	balance, err := readBalance(t, h, artifact, scriptContext, addr, account)
+	require.NoError(t, err)
+	// for testing decoding is correct
+	// require.True(t, balance.Cmp(big.NewInt(1)) == 0)
+	require.True(t, balance.Cmp(big.NewInt(0)) == 0)
+
+	slot := targetSlot(account, 1)
+	var bytes32 common.Hash
+	bitSize := 256
+	targetValue, err := rand.Int(rand.Reader, big.NewInt(1).Lsh(big.NewInt(1), uint(bitSize)))
+	require.NoError(t, err)
+	targetValue.FillBytes(bytes32[:])
+	h.cheatcodes.Precompile.Store(addr, slot, bytes32)
+
+	balance, err = readBalance(t, h, artifact, scriptContext, addr, account)
+	require.NoError(t, err)
+	require.True(t, balance.Cmp(targetValue) == 0, "got %v, expect %v", balance, targetValue)
+}
+
+func targetSlot(account common.Address, balancesSlot uint64) (slot common.Hash) {
+	Uint64, _ := abi.NewType("uint64", "", nil)
+	Address, _ := abi.NewType("address", "", nil)
+	args := abi.Arguments{{Name: "addr", Type: Address, Indexed: false}, {Name: "slot", Type: Uint64, Indexed: false}}
+	data, _ := args.Pack(account, balancesSlot)
+	slot = crypto.Keccak256Hash(data)
+	return
+}
+
+func readBalanceFromState(h *Host, addr, account common.Address) (returnValue *big.Int) {
+	state := h.state.GetState(addr, targetSlot(account, 1))
+	returnValue = new(big.Int)
+	returnValue.SetBytes(state[:])
+	return
+}
+
+func readBalance(t *testing.T, h *Host, artifact *foundry.Artifact, scriptContext Context, addr, account common.Address) (returnValue *big.Int, err error) {
+	method := artifact.ABI.Methods["balanceOf"]
+	input, err := artifact.ABI.Pack("balanceOf", account)
+	if err != nil {
+		return
+	}
+	returnData, _, err := h.Call(scriptContext.Sender, addr, input[:], DefaultFoundryGasLimit, uint256.NewInt(0))
+	if err != nil {
+		return
+	}
+	returnValueInterface, err := artifact.ABI.Unpack("balanceOf", returnData)
+	if err != nil {
+		return
+	}
+	returnValue = new(big.Int)
+	err = method.Outputs.Copy(&returnValue, returnValueInterface)
+	if err != nil {
+		return
+	}
+
+	valueFromState := readBalanceFromState(h, addr, account)
+	require.True(t, valueFromState.Cmp(returnValue) == 0, "call value:%v, state value:%v", returnValue, valueFromState)
+	return
+}
 func TestScriptBroadcast(t *testing.T) {
 	logger := testlog.Logger(t, log.LevelDebug)
 	af := foundry.OpenArtifactsDir("./testdata/test-artifacts")

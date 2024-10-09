@@ -19,9 +19,11 @@ interface Vm {
 library console {
     address constant CONSOLE_ADDRESS = address(0x000000000000000000636F6e736F6c652e6c6f67);
 
-    function _castLogPayloadViewToPure(
-        function(bytes memory) internal view fnIn
-    ) internal pure returns (function(bytes memory) internal pure fnOut) {
+    function _castLogPayloadViewToPure(function(bytes memory) internal view fnIn)
+        internal
+        pure
+        returns (function(bytes memory) internal pure fnOut)
+    {
         assembly {
             fnOut := fnIn
         }
@@ -65,14 +67,21 @@ library console {
 /// @title ScriptExample
 /// @notice ScriptExample is an example script. The Go forge script code tests that it can run this.
 contract ScriptExample {
-
     address internal constant VM_ADDRESS = address(uint160(uint256(keccak256("hevm cheat code"))));
     Vm internal constant vm = Vm(VM_ADDRESS);
 
+    uint256 dummy;
+    mapping(address => uint256) balances;
     // @notice counter variable to force non-pure calls.
     uint256 public counter;
 
+    function balanceOf(address account) public view returns (uint256) {
+        uint256 balance = balances[account];
+        // if (balance == 0) return 1; // for testing the decoding is correct.
+        return balance;
+    }
     /// @notice example function, runs through basic cheat-codes and console logs.
+
     function run() public {
         bool x = vm.envOr("EXAMPLE_BOOL", false);
         console.log("bool value from env", x);
