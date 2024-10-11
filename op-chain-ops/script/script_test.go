@@ -68,11 +68,11 @@ func TestModBalance(t *testing.T) {
 	require.True(t, balance.Cmp(big.NewInt(0)) == 0)
 
 	slot := targetSlot(account, 1)
-	var bytes32 common.Hash
+
 	bitSize := 256
 	targetValue, err := rand.Int(rand.Reader, big.NewInt(1).Lsh(big.NewInt(1), uint(bitSize)))
 	require.NoError(t, err)
-	targetValue.FillBytes(bytes32[:])
+	bytes32 := uint256.MustFromBig(targetValue).Bytes32()
 	h.cheatcodes.Precompile.Store(addr, slot, bytes32)
 
 	balance, err = readBalance(t, h, artifact, scriptContext, addr, account)
