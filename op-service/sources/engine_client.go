@@ -99,6 +99,7 @@ func (s *EngineAPIClient) ForkchoiceUpdate(ctx context.Context, fc *eth.Forkchoi
 	defer cancel()
 	var result eth.ForkchoiceUpdatedResult
 	method := s.evp.ForkchoiceUpdatedVersion(attributes)
+	fmt.Println("method", method)
 	err := s.RPC.CallContext(fcCtx, &result, string(method), fc, attributes)
 	if err == nil {
 		tlog.Trace("Shared forkchoice-updated signal")

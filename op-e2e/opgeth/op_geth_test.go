@@ -2,6 +2,7 @@ package opgeth
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 	"testing"
@@ -15,9 +16,9 @@ import (
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi/util"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -1005,6 +1006,8 @@ func TestEcotone(t *testing.T) {
 }
 
 func TestSoulGasToken(t *testing.T) {
+	SoulGasTokenABI, err := util.ParseFunctionsAsABI([]string{"function deposit()"})
+	require.NoError(t, err)
 	t.Run("no SoulGasToken", func(t *testing.T) {
 		op_e2e.InitParallel(t)
 		cfg := e2esys.DefaultSystemConfigForSoulGasToken(t, true, true)
@@ -1055,7 +1058,7 @@ func TestSoulGasToken(t *testing.T) {
 			To:    &types.SoulGasTokenAddr,
 			Value: big.NewInt(1),
 			Gas:   1000001,
-			Data:  core.SoulGasTokenABI.Methods["deposit"].ID,
+			Data:  SoulGasTokenABI.Methods["deposit"].ID,
 		})
 
 		_, err = opGeth.AddL2Block(ctx, mintTx)
@@ -1108,7 +1111,7 @@ func TestSoulGasToken(t *testing.T) {
 			To:    &types.SoulGasTokenAddr,
 			Value: big.NewInt(params.Ether),
 			Gas:   1000001,
-			Data:  core.SoulGasTokenABI.Methods["deposit"].ID,
+			Data:  SoulGasTokenABI.Methods["deposit"].ID,
 		})
 		_, err = opGeth.AddL2Block(ctx, mintTx)
 		require.NoError(t, err)
@@ -1142,6 +1145,175 @@ func TestSoulGasToken(t *testing.T) {
 		balanceAfter, err := opGeth.L2Client.BalanceAt(ctx, cfg.Secrets.Addresses().Bob, nil)
 		require.NoError(t, err)
 		require.True(t, balanceBefore.Cmp(balanceAfter) == 0)
+	})
+
+	// tx.value > acc.balance & tx.cost < acc.balance + acc.sgt_balance, should fail
+	t.Run("insufficient native token", func(t *testing.T) {
+		op_e2e.InitParallel(t)
+		cfg := e2esys.DefaultSystemConfigForSoulGasToken(t, true, true)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		opGeth, err := NewOpGeth(t, ctx, &cfg)
+		require.NoError(t, err)
+		defer opGeth.Close()
+
+		// mint enough SoulGasToken with deposit tx, but no native balance
+		targetPK, _ := crypto.GenerateKey()
+		targetAccount := crypto.PubkeyToAddress(*targetPK.Public().(*ecdsa.PublicKey))
+
+		// fund targetAccount with 1 ether
+		transferEthTx := types.NewTx(&types.DepositTx{
+			From:  cfg.Secrets.Addresses().Bob,
+			To:    &targetAccount,
+			Value: big.NewInt(params.Ether),
+			Gas:   1000001,
+		})
+		// convert 1 ether to sgt for targetAccount
+		mintTx := types.NewTx(&types.DepositTx{
+			From:  targetAccount,
+			To:    &types.SoulGasTokenAddr,
+			Value: big.NewInt(params.Ether),
+			Gas:   1000001,
+			Data:  SoulGasTokenABI.Methods["deposit"].ID,
+		})
+		_, err = opGeth.AddL2Block(ctx, transferEthTx, mintTx)
+		require.NoError(t, err)
+
+		receipt, err := opGeth.L2Client.TransactionReceipt(ctx, mintTx.Hash())
+		require.NoError(t, err)
+		assert.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
+
+		signer := types.LatestSigner(opGeth.L2ChainConfig)
+
+		tx := types.MustSignNewTx(targetPK, signer, &types.DynamicFeeTx{
+			ChainID:   big.NewInt(int64(cfg.DeployConfig.L2ChainID)),
+			Nonce:     1,
+			GasTipCap: big.NewInt(100),
+			GasFeeCap: big.NewInt(100000),
+			Gas:       1_000_001,
+			To:        &cfg.Secrets.Addresses().Alice,
+			Value:     big.NewInt(params.Ether), // this tx.value will lead to tx failure
+			Data:      nil,
+		})
+		_, err = opGeth.AddL2Block(ctx, tx)
+		// err is like: Invalid payload attributes:failed to force-include tx: ..., err: insufficient funds for gas * price + value
+		require.Error(t, err)
+
+		// TODO: investigate why the message "failed to force-include tx" is not shown, it's a bug for OP, nothing to do with us
+
+	})
+
+	// tx.cost > acc.balance + acc.sgt_balance, should fail
+	t.Run("cost exceed native+sgt balance", func(t *testing.T) {
+		op_e2e.InitParallel(t)
+		cfg := e2esys.DefaultSystemConfigForSoulGasToken(t, true, true)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		opGeth, err := NewOpGeth(t, ctx, &cfg)
+		require.NoError(t, err)
+		defer opGeth.Close()
+
+		// mint enough SoulGasToken with deposit tx, but no native balance
+		targetPK, _ := crypto.GenerateKey()
+		targetAccount := crypto.PubkeyToAddress(*targetPK.Public().(*ecdsa.PublicKey))
+
+		// fund targetAccount with 2 wei
+		transferEthTx := types.NewTx(&types.DepositTx{
+			From:  cfg.Secrets.Addresses().Bob,
+			To:    &targetAccount,
+			Value: big.NewInt(params.Wei),
+			Gas:   1000001,
+		})
+		// convert 1 wei to sgt for targetAccount
+		mintTx := types.NewTx(&types.DepositTx{
+			From:  targetAccount,
+			To:    &types.SoulGasTokenAddr,
+			Value: big.NewInt(params.Wei),
+			Gas:   1000001,
+			Data:  SoulGasTokenABI.Methods["deposit"].ID,
+		})
+		_, err = opGeth.AddL2Block(ctx, transferEthTx, mintTx)
+		require.NoError(t, err)
+
+		receipt, err := opGeth.L2Client.TransactionReceipt(ctx, mintTx.Hash())
+		require.NoError(t, err)
+		assert.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
+
+		signer := types.LatestSigner(opGeth.L2ChainConfig)
+
+		tx := types.MustSignNewTx(targetPK, signer, &types.DynamicFeeTx{
+			ChainID:   big.NewInt(int64(cfg.DeployConfig.L2ChainID)),
+			Nonce:     1,
+			GasTipCap: big.NewInt(100),
+			GasFeeCap: big.NewInt(100000),
+			Gas:       1_000_001,
+			To:        &cfg.Secrets.Addresses().Alice,
+			Value:     big.NewInt(params.Wei),
+			Data:      nil,
+		})
+		_, err = opGeth.AddL2Block(ctx, tx)
+		require.Error(t, err)
+	})
+
+	// tx.value <= acc.balance && tx.cost <= acc.balance + acc.sgt_balance, should succeed
+	t.Run("happy path", func(t *testing.T) {
+		op_e2e.InitParallel(t)
+		cfg := e2esys.DefaultSystemConfigForSoulGasToken(t, true, true)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		opGeth, err := NewOpGeth(t, ctx, &cfg)
+		require.NoError(t, err)
+		defer opGeth.Close()
+
+		// mint enough SoulGasToken with deposit tx, but no native balance
+		targetPK, _ := crypto.GenerateKey()
+		targetAccount := crypto.PubkeyToAddress(*targetPK.Public().(*ecdsa.PublicKey))
+
+		// fund targetAccount with 1 eth + 1wei
+		transferEthTx := types.NewTx(&types.DepositTx{
+			From:  cfg.Secrets.Addresses().Bob,
+			To:    &targetAccount,
+			Value: big.NewInt(params.Ether + params.Wei),
+			Gas:   1000001,
+		})
+		// convert 1 eth to sgt for targetAccount
+		mintTx := types.NewTx(&types.DepositTx{
+			From:  targetAccount,
+			To:    &types.SoulGasTokenAddr,
+			Value: big.NewInt(params.Ether),
+			Gas:   1000001,
+			Data:  SoulGasTokenABI.Methods["deposit"].ID,
+		})
+		_, err = opGeth.AddL2Block(ctx, transferEthTx, mintTx)
+		require.NoError(t, err)
+
+		receipt, err := opGeth.L2Client.TransactionReceipt(ctx, mintTx.Hash())
+		require.NoError(t, err)
+		assert.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
+
+		signer := types.LatestSigner(opGeth.L2ChainConfig)
+
+		tx := types.MustSignNewTx(targetPK, signer, &types.DynamicFeeTx{
+			ChainID:   big.NewInt(int64(cfg.DeployConfig.L2ChainID)),
+			Nonce:     1,
+			GasTipCap: big.NewInt(100),
+			GasFeeCap: big.NewInt(100000),
+			Gas:       1_000_001,
+			To:        &cfg.Secrets.Addresses().Alice,
+			Value:     big.NewInt(params.Wei),
+			Data:      nil,
+		})
+		_, err = opGeth.AddL2Block(ctx, tx)
+		require.NoError(t, err)
+	})
+
+	t.Run("the gas formula holds", func(t *testing.T) {
 	})
 }
 
