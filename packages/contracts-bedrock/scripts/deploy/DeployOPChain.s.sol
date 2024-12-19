@@ -563,7 +563,7 @@ contract DeployOPChain is Script {
             "SYSCON-210"
         );
         (address gasPayingToken,) = systemConfig.gasPayingToken();
-        require(gasPayingToken == Constants.ETHER, "SYSCON-220");
+        require(gasPayingToken != Constants.ETHER, "SYSCON-220");
     }
 
     function assertValidL1CrossDomainMessenger(DeployOPChainInput _doi, DeployOPChainOutput _doo) internal {
