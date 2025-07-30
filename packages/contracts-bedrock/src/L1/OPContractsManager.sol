@@ -33,6 +33,7 @@ import { IOptimismMintableERC20Factory } from "interfaces/universal/IOptimismMin
 import { IHasSuperchainConfig } from "interfaces/L1/IHasSuperchainConfig.sol";
 import { IETHLockbox } from "interfaces/L1/IETHLockbox.sol";
 import { OPContractsManagerStandardValidator } from "src/L1/OPContractsManagerStandardValidator.sol";
+import "forge-std/console.sol";
 
 contract OPContractsManagerContractsContainer {
     /// @notice Addresses of the Blueprint contracts.
@@ -961,8 +962,11 @@ contract OPContractsManagerDeployer is OPContractsManagerBase {
         virtual
         returns (OPContractsManager.DeployOutput memory)
     {
+        console.log("step1");
         assertValidInputs(_input);
+        console.log("step2");
         OPContractsManager.DeployOutput memory output;
+        console.log("step3");
         OPContractsManager.Blueprints memory blueprint = getBlueprints();
         OPContractsManager.Implementations memory implementation = getImplementations();
 
@@ -977,6 +981,7 @@ contract OPContractsManagerDeployer is OPContractsManagerBase {
                 abi.encode()
             )
         );
+        console.log("step4");
         // The ProxyAdmin is the owner of all proxies for the chain. We temporarily set the owner to
         // this contract, and then transfer ownership to the specified owner at the end of deployment.
         output.opChainProxyAdmin = IProxyAdmin(
@@ -986,32 +991,42 @@ contract OPContractsManagerDeployer is OPContractsManagerBase {
                 abi.encode(address(this))
             )
         );
+        console.log("step5");
         // Set the AddressManager on the ProxyAdmin.
         output.opChainProxyAdmin.setAddressManager(output.addressManager);
+        console.log("step6");
         // Transfer ownership of the AddressManager to the ProxyAdmin.
         transferOwnership(address(output.addressManager), address(output.opChainProxyAdmin));
+        console.log("step7");
 
         // -------- Deploy Proxy Contracts --------
 
         // Deploy ERC-1967 proxied contracts.
         output.l1ERC721BridgeProxy =
             IL1ERC721Bridge(deployProxy(_input.l2ChainId, output.opChainProxyAdmin, _input.saltMixer, "L1ERC721Bridge"));
+        console.log("step8");
         output.optimismPortalProxy = IOptimismPortal(
             payable(deployProxy(_input.l2ChainId, output.opChainProxyAdmin, _input.saltMixer, "OptimismPortal"))
         );
+        console.log("step9");
         output.ethLockboxProxy =
             IETHLockbox(deployProxy(_input.l2ChainId, output.opChainProxyAdmin, _input.saltMixer, "ETHLockbox"));
+        console.log("step10");
         output.systemConfigProxy =
             ISystemConfig(deployProxy(_input.l2ChainId, output.opChainProxyAdmin, _input.saltMixer, "SystemConfig"));
+        console.log("step11");
         output.optimismMintableERC20FactoryProxy = IOptimismMintableERC20Factory(
             deployProxy(_input.l2ChainId, output.opChainProxyAdmin, _input.saltMixer, "OptimismMintableERC20Factory")
         );
+        console.log("step12");
         output.disputeGameFactoryProxy = IDisputeGameFactory(
             deployProxy(_input.l2ChainId, output.opChainProxyAdmin, _input.saltMixer, "DisputeGameFactory")
         );
+        console.log("step13");
         output.anchorStateRegistryProxy = IAnchorStateRegistry(
             deployProxy(_input.l2ChainId, output.opChainProxyAdmin, _input.saltMixer, "AnchorStateRegistry")
         );
+        console.log("step14");
 
         // Deploy legacy proxied contracts.
         output.l1StandardBridgeProxy = IL1StandardBridge(
@@ -1023,6 +1038,7 @@ contract OPContractsManagerDeployer is OPContractsManagerBase {
                 )
             )
         );
+        console.log("step15");
         output.opChainProxyAdmin.setProxyType(address(output.l1StandardBridgeProxy), IProxyAdmin.ProxyType.CHUGSPLASH);
         string memory contractName = "OVM_L1CrossDomainMessenger";
         output.l1CrossDomainMessengerProxy = IL1CrossDomainMessenger(
@@ -1032,17 +1048,20 @@ contract OPContractsManagerDeployer is OPContractsManagerBase {
                 abi.encode(output.addressManager, contractName)
             )
         );
+        console.log("step16");
         output.opChainProxyAdmin.setProxyType(
             address(output.l1CrossDomainMessengerProxy), IProxyAdmin.ProxyType.RESOLVED
         );
         output.opChainProxyAdmin.setImplementationName(address(output.l1CrossDomainMessengerProxy), contractName);
 
+        console.log("step17");
         // Eventually we will switch from DelayedWETHPermissionedGameProxy to DelayedWETHPermissionlessGameProxy.
         output.delayedWETHPermissionedGameProxy = IDelayedWETH(
             payable(
                 deployProxy(_input.l2ChainId, output.opChainProxyAdmin, _input.saltMixer, "DelayedWETHPermissionedGame")
             )
         );
+        console.log("step18");
 
         // While not a proxy, we deploy the PermissionedDisputeGame here as well because it's bespoke per chain.
         output.permissionedDisputeGame = IPermissionedDisputeGame(
@@ -1068,6 +1087,7 @@ contract OPContractsManagerDeployer is OPContractsManagerBase {
                 )
             )
         );
+        console.log("step19");
 
         // -------- Set and Initialize Proxy Implementations --------
         bytes memory data;

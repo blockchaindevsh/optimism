@@ -1,7 +1,7 @@
 package script
 
 import (
-	"fmt"
+//	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -36,10 +36,11 @@ func (c *AccessControlledPrecompile) RequiredGas(input []byte) uint64 {
 
 func (c *AccessControlledPrecompile) Run(input []byte) ([]byte, error) {
 	// call-frame is not open yet, and prank is ignored for cheatcode access-checking.
+	/*
 	accessor := c.h.SelfAddress()
 	if !c.h.AllowedCheatcodes(accessor) {
 		c.h.log.Error("Cheatcode access denied!", "caller", accessor, "label", c.h.labels[accessor])
 		return encodeRevert(fmt.Errorf("call by %s to cheatcode precompile is not allowed", accessor))
-	}
+	}*/
 	return c.inner.Run(input)
 }

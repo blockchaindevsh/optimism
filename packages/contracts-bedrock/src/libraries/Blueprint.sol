@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { Bytes } from "src/libraries/Bytes.sol";
+import "forge-std/console.sol";
 
 /// @notice Methods for working with ERC-5202 blueprint contracts.
 /// https://eips.ethereum.org/EIPS/eip-5202
@@ -127,6 +128,7 @@ library Blueprint {
         if (preamble.preambleData.length != 0) revert UnexpectedPreambleData(preamble.preambleData);
 
         bytes memory initcode = bytes.concat(preamble.initcode, _data);
+        console.log("initcode length:", initcode.length);
         assembly ("memory-safe") {
             newContract_ := create2(0, add(initcode, 0x20), mload(initcode), _salt)
         }
@@ -153,6 +155,7 @@ library Blueprint {
         if (preamble2.preambleData.length != 0) revert UnexpectedPreambleData(preamble2.preambleData);
 
         bytes memory initcode = bytes.concat(preamble1.initcode, preamble2.initcode, _data);
+        console.log("initcode length:", initcode.length);
         assembly ("memory-safe") {
             newContract_ := create2(0, add(initcode, 0x20), mload(initcode), _salt)
         }

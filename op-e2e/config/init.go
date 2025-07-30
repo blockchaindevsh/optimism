@@ -156,10 +156,10 @@ func init() {
 	// Setup global logger
 	lvl := log.FromLegacyLevel(EthNodeVerbosity)
 	var handler slog.Handler
-	var errHandler slog.Handler
+	//var errHandler slog.Handler
 	if lvl > log.LevelCrit {
 		handler = log.DiscardHandler()
-		errHandler = log.DiscardHandler()
+		//errHandler = log.DiscardHandler()
 	} else {
 		if lvl < log.LevelTrace { // clip to trace level
 			lvl = log.LevelTrace
@@ -173,16 +173,19 @@ func init() {
 			Format: oplog.FormatTerminal,
 		})
 
+		/*
 		errHandler = oplog.NewLogHandler(os.Stderr, oplog.CLIConfig{
 			Level:  log.LevelError,
 			Color:  false,
 			Format: oplog.FormatTerminal,
 		})
+		*/
 	}
 
 	// Start at warning level since alloc generation is heavy on the logs,
 	// which reduces CI performance.
-	oplog.SetGlobalLogHandler(errHandler)
+	//oplog.SetGlobalLogHandler(errHandler)
+	oplog.SetGlobalLogHandler(handler)
 
 	for _, allocType := range allocTypes {
 		if allocType == AllocTypeL2OO {
@@ -218,7 +221,7 @@ func init() {
 	var wg sync.WaitGroup
 	for _, fork := range forks {
 		wg.Add(1)
-		go func(fork genesis.L2AllocsMode) {
+		func(fork genesis.L2AllocsMode) {
 			defer wg.Done()
 			var l2OOAllocsL2 foundry.ForgeAllocs
 			decompressGzipJSON(path.Join(configPath, fmt.Sprintf("allocs-l2-%s.json.gz", fork)), &l2OOAllocsL2)
@@ -265,7 +268,7 @@ func initAllocType(root string, allocType AllocType) {
 
 	for _, mode := range allocModes {
 		wg.Add(1)
-		go func(mode genesis.L2AllocsMode) {
+		func(mode genesis.L2AllocsMode) {
 			defer wg.Done()
 
 			intent := defaultIntent(root, loc, deployerAddr, allocType)
